@@ -264,7 +264,7 @@ function initSupa(){}
     <p class="home-loc">📍 Les Voltes, 2 · Calella de Palafrugell</p>
     <div class="home-buttons">
       <button class="btn-main" onclick="show('list')">📚 Formaciones</button>
-      <button class="btn-secondary" onclick="show('admin')">➕ Nueva Formación</button>
+      <button class="btn-secondary" onclick="requirePin(()=>show('admin'))">➕ Nueva Formación</button>
       <button class="btn-tertiary" onclick="show('card')">📇 Tarjeta de Empleado</button>
     </div>
     <div class="home-stats"><div><strong id="sc">0</strong><span>Formaciones</span></div><div><strong id="scat">0</strong><span>Áreas</span></div></div>
@@ -385,13 +385,6 @@ function initSupa(){}
         <div class="admin-section-title" style="margin:20px -16px 10px;padding-left:16px;">🧠 Preguntas Quiz <span style="font-weight:normal;text-transform:none;font-size:11px;">(opcional)</span></div>
         <div class="quiz-list" id="quiz-list"></div>
         <button class="add-btn" onclick="addQuizQ()">+ Añadir pregunta</button>
-        <!-- PIN SETTINGS -->
-        <div class="admin-section-title" style="margin:20px -16px 10px;padding-left:16px;">🔐 PIN de acceso</div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <input type="password" id="new-pin" placeholder="Nuevo PIN (4 dígitos)" maxlength="4" inputmode="numeric" style="border:1px solid #ddd;border-radius:4px;padding:8px 10px;font-size:14px;outline:none;width:180px;">
-          <button onclick="savePin()" style="background:#1a5ca8;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px;">Guardar PIN</button>
-        </div>
-        <p style="font-size:11px;color:#888;margin-top:6px;">PIN actual: <span id="pin-display"></span></p>
         <!-- GUARDAR -->
         <div style="margin-top:20px;">
           <button class="btn-save" id="btn-save-recipe" onclick="saveRecipe()">💾 Guardar formación</button>
