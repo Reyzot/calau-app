@@ -255,6 +255,22 @@ body.dark .quiz-q-row{background:#1c2128;border-color:#30363d;}
   body *{display:none!important;}
   #print-card{display:block!important;}
 }
+/* ONBOARDING */
+.ob-name-form{display:flex;flex-direction:column;gap:16px;padding:16px 0;}
+.ob-employee-card{background:var(--bg-card);border-radius:10px;padding:16px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px;cursor:pointer;border:2px solid transparent;transition:border-color 0.15s;}
+.ob-employee-card:hover{border-color:#1a5ca8;}
+.ob-employee-avatar{width:48px;height:48px;border-radius:50%;background:#1a5ca8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;flex-shrink:0;}
+.ob-progress-bar{background:#e8edf5;border-radius:6px;height:7px;width:100%;margin-top:8px;}
+.ob-progress-fill{background:#1a5ca8;border-radius:6px;height:7px;transition:width 0.4s;}
+.ob-form-item{background:var(--bg-card);border-radius:8px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;border:1.5px solid var(--border);transition:border-color 0.15s;}
+.ob-form-item:hover{border-color:#1a5ca8;}
+.ob-form-item.passed{border-color:#2e7d32;background:#f1f8f1;}
+.ob-form-item.tried{border-color:#e67e22;background:#fef9f0;}
+.ob-badge{font-size:11px;font-weight:bold;padding:3px 8px;border-radius:12px;margin-left:auto;white-space:nowrap;flex-shrink:0;}
+.ob-badge.ob-passed{background:#c8e6c9;color:#2e7d32;}
+.ob-badge.ob-tried{background:#ffe0b2;color:#b45309;}
+.ob-badge.ob-pending{background:#e8edf5;color:#555;}
+.ob-summary{background:var(--bg-card);border-radius:10px;padding:20px;text-align:center;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 </style>
 <script>
 const SUPA_URL="https://mbvmvzmjpiofxkukdxyb.supabase.co";
@@ -276,7 +292,7 @@ function initSupa(){}
     <div class="home-buttons">
       <button class="btn-main" onclick="show('list')">📚 Formaciones</button>
       <button class="btn-secondary" onclick="show('admin')">➕ Nueva Formación</button>
-      <button class="btn-tertiary" onclick="show('card')">📇 Tarjeta de Empleado</button>
+      <button class="btn-tertiary" onclick="show('card')">👋 Incorporación</button>
     </div>
     <div class="home-stats"><div><strong id="sc">0</strong><span>Formaciones</span></div><div><strong id="scat">0</strong><span>Áreas</span></div></div>
     <div id="sync-status" style="font-size:11px;color:#aaa;margin-top:8px;height:16px;"></div>
@@ -417,45 +433,13 @@ function initSupa(){}
   <div id="quiz-body" style="flex:1;overflow-y:auto;"></div>
 </div>
 
-<!-- CARD SCREEN -->
+<!-- ONBOARDING SCREEN -->
 <div id="card" class="screen">
   <div class="detail-header">
     <button class="back-btn" onclick="show('home')" style="color:#fff;font-size:20px;">←</button>
-    <span>TARJETA DE EMPLEADO</span>
-    <button onclick="printCard()" style="margin-left:auto;background:#1a5ca8;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;">🖨️ Imprimir</button>
+    <span id="onboard-title">INCORPORACIÓN</span>
   </div>
-  <div class="card-screen-body" style="overflow-y:auto;flex:1;">
-    <div class="admin-section">
-      <div class="admin-section-title">Datos del empleado</div>
-      <div class="admin-form">
-        <div class="form-row">
-          <div class="form-group"><label>Nombre completo</label><input type="text" id="card-name" placeholder="Nombre Apellido" oninput="renderCardPreview()"></div>
-          <div class="form-group"><label>Cargo / Área</label>
-            <select id="card-role" onchange="renderCardPreview()">
-              <option>Sala</option><option>Cocina</option><option>Almacén</option><option>General</option><option>Responsable</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row full">
-          <div class="form-group">
-            <label>Foto del empleado</label>
-            <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
-              <img id="card-photo-preview" style="width:60px;height:60px;object-fit:cover;border-radius:50%;border:2px solid #1a5ca8;display:none;">
-              <label class="photo-btn" style="cursor:pointer;">📷 Foto<input type="file" accept="image/*" style="display:none;" onchange="loadCardPhoto(event)"></label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="admin-section">
-      <div class="admin-section-title">Formaciones completadas</div>
-      <div style="padding:12px 16px;" id="card-checklist"></div>
-    </div>
-    <div id="card-preview-wrap" style="display:none;">
-      <div class="admin-section-title" style="margin-top:16px;">Vista previa</div>
-      <div id="card-preview" style="padding:16px;"></div>
-    </div>
-  </div>
+  <div id="onboard-body" style="overflow-y:auto;flex:1;padding:16px;max-width:600px;margin:0 auto;width:100%;box-sizing:border-box;"></div>
 </div>
 
 <!-- PIN MODAL -->
@@ -552,6 +536,7 @@ const DATA=[
 let current=null,speaking=false,spd=1,activeCat="Todos";
 let _pinCb=null,_pinVal="";
 let _quizData=[],_quizIdx=0,_quizScore=0,_quizAnswered=false;
+let _obEmployee=null,_obFormId=null,_obQuizMode=false;
 let _displayMode="carousel";
 let _cardPhotoData="";
 
@@ -640,7 +625,7 @@ function show(id){
   if(id==="home")updateStats();
   if(id!=="detail")stopSpeech();
   if(id==="admin"){renderAdminList();const il=document.getElementById("ing-list");const isEdit=document.getElementById("edit-id").value;if(!il.children.length&&!isEdit){addIng();addIng();addStep("","",0);addStep("","",1);addStep("","",2);}}
-  if(id==="card")renderCardChecklist();
+  if(id==="card")renderOnboarding();
 }
 
 function updateStats(){
@@ -770,6 +755,7 @@ function copyRecipe(){
 // ===== QUIZ =====
 function openQuiz(){
   if(!current||!(current.quiz||[]).length){showToast("Esta formación no tiene quiz");return;}
+  _obQuizMode=false;_obFormId=null;
   _quizData=[...current.quiz];_quizIdx=0;_quizScore=0;_quizAnswered=false;
   document.getElementById("quiz-title-bar").textContent=current.name+" — Quiz";
   show("quiz");
@@ -780,12 +766,25 @@ function renderQuizQ(){
   if(_quizIdx>=_quizData.length){
     const pct=Math.round((_quizScore/_quizData.length)*100);
     const ok=pct>=70;
+    if(_obQuizMode&&_obEmployee!==null){
+      const employees=getEmployees();
+      const emp=employees[_obEmployee];
+      if(emp){
+        if(!emp.progress)emp.progress={};
+        const prev=emp.progress[_obFormId]||{attempts:0};
+        emp.progress[_obFormId]={score:_quizScore,total:_quizData.length,passed:ok,date:Date.now(),attempts:(prev.attempts||0)+1};
+        saveEmployees(employees);
+      }
+    }
+    const repeatFn=_obQuizMode?`startOnboardQuiz('${_obFormId}')`:"openQuiz()";
+    const backFn=_obQuizMode?"goToDashboard()":"show('detail')";
+    const backLabel=_obQuizMode?"📊 Ver progreso":"← Volver";
     body.innerHTML=`<div class="quiz-result-box">
       <div style="font-size:60px;margin-bottom:16px;">${ok?"🎉":"😅"}</div>
       <h2 style="font-size:24px;margin-bottom:8px;color:${ok?"#2e7d32":"#c00"};">${_quizScore}/${_quizData.length}</h2>
       <p style="color:#666;font-size:16px;margin-bottom:24px;">${pct}% — ${ok?"¡Aprobado!":"Necesita repasar"}</p>
-      <button class="btn-main" onclick="openQuiz()" style="max-width:200px;margin:0 auto 10px;">🔄 Repetir</button>
-      <button class="btn-secondary" onclick="show('detail')" style="max-width:200px;margin:0 auto;">← Volver</button>
+      <button class="btn-main" onclick="${repeatFn}" style="max-width:200px;margin:0 auto 10px;">🔄 Repetir</button>
+      <button class="btn-secondary" onclick="${backFn}" style="max-width:200px;margin:0 auto;">${backLabel}</button>
     </div>`;
     document.getElementById("quiz-progress").textContent="";
     return;
@@ -1140,6 +1139,138 @@ function renderCardPreview(){
   const pc=document.getElementById("print-card");if(pc)pc.innerHTML=preview.innerHTML;
 }
 function printCard(){renderCardPreview();setTimeout(()=>window.print(),200);}
+
+// ===== ONBOARDING =====
+function getEmployees(){try{return JSON.parse(localStorage.getItem('calau_employees')||'[]');}catch(e){return[];}}
+function saveEmployees(arr){localStorage.setItem('calau_employees',JSON.stringify(arr));}
+
+function goToDashboard(){_obQuizMode=false;show('card');renderDashboard();}
+
+function renderOnboarding(){
+  const el=document.getElementById('onboard-body');
+  const titleEl=document.getElementById('onboard-title');
+  if(!el)return;
+  if(titleEl)titleEl.textContent='INCORPORACIÓN';
+  const employees=getEmployees();
+  const all=getAllRecipes().filter(r=>(r.quiz||[]).length);
+  let html=`<div style="margin-bottom:20px;">
+    <h2 style="font-size:18px;font-weight:bold;color:var(--text);margin:0 0 4px;">Empleados</h2>
+    <p style="font-size:13px;color:#888;margin:0 0 16px;">Selecciona tu perfil o crea uno nuevo</p>
+    ${employees.map((emp,i)=>{
+      const done=all.filter(r=>(emp.progress||{})[r.id]&&emp.progress[r.id].passed).length;
+      const pct=all.length?Math.round((done/all.length)*100):0;
+      return `<div class="ob-employee-card" onclick="loadEmployee(${i})">
+        <div class="ob-employee-avatar">${(emp.name||'?').charAt(0).toUpperCase()}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:bold;color:var(--text);margin-bottom:2px;">${emp.name}</div>
+          <div style="font-size:12px;color:#888;">${emp.role} · ${done}/${all.length} formaciones</div>
+          <div class="ob-progress-bar"><div class="ob-progress-fill" style="width:${pct}%"></div></div>
+        </div>
+        <div style="font-size:14px;font-weight:bold;color:#1a5ca8;flex-shrink:0;">${pct}%</div>
+      </div>`;
+    }).join('')}
+    <button class="btn-main" onclick="renderNameStep()" style="margin-top:8px;">+ Nuevo empleado</button>
+  </div>`;
+  el.innerHTML=html;
+}
+
+function renderNameStep(){
+  const el=document.getElementById('onboard-body');
+  const titleEl=document.getElementById('onboard-title');
+  if(titleEl)titleEl.textContent='NUEVA INCORPORACIÓN';
+  el.innerHTML=`<div class="ob-name-form">
+    <h2 style="font-size:18px;font-weight:bold;color:var(--text);margin:0;">Bienvenido al equipo Calau</h2>
+    <div class="form-group"><label>Tu nombre completo</label><input type="text" id="ob-name" placeholder="Nombre Apellido" style="width:100%;box-sizing:border-box;"></div>
+    <div class="form-group"><label>Tu área</label>
+      <select id="ob-role" style="width:100%;box-sizing:border-box;">
+        <option>Sala</option><option>Cocina</option><option>Almacén</option><option>General</option><option>Responsable</option>
+      </select>
+    </div>
+    <button class="btn-main" onclick="startOnboarding()">Comenzar formación →</button>
+    <button class="btn-secondary" onclick="renderOnboarding()">← Volver</button>
+  </div>`;
+}
+
+function startOnboarding(){
+  const nameEl=document.getElementById('ob-name');
+  const name=(nameEl?nameEl.value:'').trim();
+  if(!name){showToast("Introduce tu nombre");return;}
+  const role=(document.getElementById('ob-role')||{value:'General'}).value;
+  const employees=getEmployees();
+  employees.push({name,role,progress:{},createdAt:Date.now()});
+  saveEmployees(employees);
+  _obEmployee=employees.length-1;
+  renderDashboard();
+}
+
+function loadEmployee(idx){
+  _obEmployee=idx;
+  renderDashboard();
+}
+
+function renderDashboard(){
+  const el=document.getElementById('onboard-body');
+  const titleEl=document.getElementById('onboard-title');
+  const employees=getEmployees();
+  const emp=employees[_obEmployee];
+  if(!emp){renderOnboarding();return;}
+  if(titleEl)titleEl.textContent='MI FORMACIÓN';
+  const all=getAllRecipes().filter(r=>(r.quiz||[]).length);
+  const done=all.filter(r=>(emp.progress||{})[r.id]&&emp.progress[r.id].passed).length;
+  const pct=all.length?Math.round((done/all.length)*100):0;
+  const allPassed=all.length>0&&done===all.length;
+
+  let html=`<div class="ob-summary">
+    <div class="ob-employee-avatar" style="margin:0 auto 10px;width:56px;height:56px;font-size:24px;">${emp.name.charAt(0).toUpperCase()}</div>
+    <div style="font-size:18px;font-weight:bold;color:var(--text);margin-bottom:2px;">${emp.name}</div>
+    <div style="font-size:13px;color:#888;margin-bottom:12px;">${emp.role}</div>
+    <div style="font-size:32px;font-weight:bold;color:${pct>=70?"#2e7d32":"#1a5ca8"};margin-bottom:4px;">${pct}%</div>
+    <div style="font-size:13px;color:#888;margin-bottom:10px;">${done}/${all.length} formaciones superadas</div>
+    <div class="ob-progress-bar" style="max-width:200px;margin:0 auto;"><div class="ob-progress-fill" style="width:${pct}%;background:${pct>=70?"#2e7d32":"#1a5ca8"};"></div></div>
+    ${allPassed?'<div style="margin-top:12px;font-size:15px;color:#2e7d32;font-weight:bold;">¡Incorporación completada!</div>':''}
+  </div>
+  <div style="font-size:11px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Formaciones</div>`;
+
+  const cats=[...new Set(all.map(r=>r.cat))];
+  if(cats.length){
+    cats.forEach(cat=>{
+      const catForms=all.filter(r=>r.cat===cat);
+      html+=`<div style="font-size:11px;font-weight:bold;color:#1a5ca8;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px;">${cat}</div>`;
+      catForms.forEach(r=>{
+        const prog=(emp.progress||{})[r.id];
+        const passed=prog&&prog.passed;
+        const tried=prog&&!prog.passed;
+        const cls=passed?'passed':tried?'tried':'';
+        const badge=passed?`<span class="ob-badge ob-passed">✓ ${prog.score}/${prog.total}</span>`:tried?`<span class="ob-badge ob-tried">✗ ${prog.score}/${prog.total}</span>`:`<span class="ob-badge ob-pending">Pendiente</span>`;
+        html+=`<div class="ob-form-item ${cls}" onclick="startOnboardQuiz('${r.id}')">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:bold;color:var(--text);font-size:14px;">${r.name}</div>
+            ${prog?`<div style="font-size:11px;color:#888;margin-top:2px;">${prog.attempts||1} intento${(prog.attempts||1)>1?"s":""} · ${new Date(prog.date).toLocaleDateString("es-ES")}</div>`:'<div style="font-size:11px;color:#aaa;margin-top:2px;">Toca para empezar</div>'}
+          </div>
+          ${badge}
+        </div>`;
+      });
+    });
+  } else {
+    html+=`<div style="padding:24px;text-align:center;color:#aaa;">No hay formaciones con quiz disponibles</div>`;
+  }
+
+  html+=`<button class="btn-secondary" onclick="renderOnboarding()" style="margin-top:16px;">← Cambiar empleado</button>`;
+  el.innerHTML=html;
+}
+
+function startOnboardQuiz(formId){
+  const all=getAllRecipes();
+  const form=all.find(r=>String(r.id)===String(formId));
+  if(!form){showToast("Formación no encontrada");return;}
+  if(!(form.quiz||[]).length){showToast("Esta formación no tiene quiz");return;}
+  _obFormId=formId;_obQuizMode=true;
+  current=form;
+  _quizData=[...form.quiz];_quizIdx=0;_quizScore=0;_quizAnswered=false;
+  document.getElementById("quiz-title-bar").textContent=form.name+" — Quiz";
+  show("quiz");
+  renderQuizQ();
+}
 
 // ===== BACKUP =====
 function downloadBackup(){
