@@ -74,9 +74,14 @@ body.dark .no-img{background:#1c2128;color:#555;}
 body.dark .card-title{color:#f5f5f5;}
 .card-meta{display:flex;gap:10px;font-size:11px;color:#9A9590;font-weight:500;}
 .card-desc{font-size:12px;color:#7A7570;line-height:1.45;margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.card-missing{padding:4px 10px 8px;display:flex;flex-wrap:wrap;gap:4px;}
-.miss-tag{font-size:10px;background:#fff8e1;color:#7a5800;border:1px solid #f0c040;border-radius:3px;padding:2px 6px;}
-body.dark .miss-tag{background:#2a2000;color:#f0c040;border-color:#6b5200;}
+.card-status{margin-top:6px;padding:0 0 2px;display:flex;flex-wrap:wrap;gap:4px;}
+.cs-tag{font-size:9px;padding:2px 7px;border-radius:3px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;}
+.cs-foto{background:#fff8e1;color:#7a5800;border:1px solid #f0c040;}
+.cs-pasos{background:#FFF8DC;color:#C8960A;border:1px solid #E8D080;}
+.cs-photos{background:#e8f0ff;color:#1a5a9a;border:1px solid #a8c8f0;}
+.cs-complete{background:#e8f7e8;color:#2a7a2a;border:1px solid #90c890;}
+.cs-mat{background:#fde8f0;color:#9a1a5a;border:1px solid #f0a8c8;}
+.cs-quiz{background:#e8eeff;color:#3a4a9a;border:1px solid #a8b0f0;}
 .no-results{grid-column:1/-1;text-align:center;padding:40px;color:#aaa;}
 #detail{background:#f5f5f5;}
 body.dark #detail{background:#0d1117;}
@@ -608,14 +613,17 @@ function _fmtDate(ts){
   const h=d.getHours().toString().padStart(2,'0'),m=d.getMinutes().toString().padStart(2,'0');
   return day+'/'+mon+'/'+yr+' '+h+':'+m;
 }
-function getMissingTags(d){
-  const t=[];
-  if(!d.img)t.push("📷 Sin foto");
-  if(!(d.utensilios||[]).length)t.push("🔧 Sin materiales");
-  if(!(d.steps||[]).length)t.push("📋 Sin pasos");
-  else{const p=Object.keys(d.stepPhotos||{}).length;if(p<(d.steps||[]).length)t.push("🖼️ "+p+"/"+(d.steps.length)+" fotos");}
-  if(!(d.quiz||[]).length)t.push("🧠 Sin quiz");
-  return t;
+function getStatusHtml(d){
+  const img=!!d.img,ps=!(d.steps||[]).length,pu=!(d.utensilios||[]).length,hq=(d.quiz||[]).length>0;
+  const sp=img&&!ps&&Object.keys(d.stepPhotos||{}).length>=(d.steps||[]).length;
+  if(img&&!ps&&!pu&&hq&&sp)return '<div class="card-status"><span class="cs-tag cs-complete">✅ Completa</span></div>';
+  let tags='';
+  if(!img)tags+='<span class="cs-tag cs-foto">Sin foto</span>';
+  if(ps)tags+='<span class="cs-tag cs-pasos">Sin pasos</span>';
+  if(pu)tags+='<span class="cs-tag cs-mat">Sin materiales</span>';
+  if(!ps&&!sp)tags+='<span class="cs-tag cs-photos">Sin fotos proceso</span>';
+  if(!hq)tags+='<span class="cs-tag cs-quiz">Sin quiz</span>';
+  return tags?'<div class="card-status">'+tags+'</div>':"";
 }
 
 // ===== NAVIGATION =====
@@ -654,12 +662,9 @@ function render(){
     try{filtered.sort((a,b)=>a.name.localeCompare(b.name,"es"));}catch(e){}
     grid.innerHTML=filtered.map(d=>{
       try{
-        const miss=getMissingTags(d);
-        const missHtml=miss.length?`<div class="card-missing">${miss.map(m=>`<span class="miss-tag">${m}</span>`).join("")}</div>`:"";
         return `<div class="recipe-card" onclick="openItem(${d.id})">
           <div class="card-top">${d.img?`<img src="${d.img}" alt="${d.name}" loading="lazy">`:`<div class="no-img">${d.emoji||"📋"}</div>`}<span class="card-cat-tag">${d.cat}</span>${(d.video&&(d.displayMode==="video"||d.displayMode==="both"))?'<span class="video-badge">▶ Vídeo</span>':""}</div>
-          <div class="card-body"><div class="card-title">${d.name}</div><div class="card-meta"><span>📋 ${(d.steps||[]).length} pasos</span><span>🔧 ${(d.utensilios||[]).length} mat.</span>${(d.quiz||[]).length?`<span>🧠 ${d.quiz.length}Q</span>`:""}</div><div class="card-desc">${d.desc||""}</div></div>
-          ${missHtml}
+          <div class="card-body"><div class="card-title">${d.name}</div><div class="card-meta"><span>📋 ${(d.steps||[]).length} pasos</span><span>🔧 ${(d.utensilios||[]).length} mat.</span>${(d.quiz||[]).length?`<span>🧠 ${d.quiz.length}Q</span>`:""}</div><div class="card-desc">${d.desc||""}</div>${getStatusHtml(d)}</div>
         </div>`;
       }catch(e){return "";}
     }).join("");
