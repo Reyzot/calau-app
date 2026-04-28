@@ -728,15 +728,23 @@ function initCarousel(){
 }
 function renderCar(){
   if(!current||!current.steps||!current.steps.length)return;
-  const steps=current.steps,total=steps.length,sp=current.stepPhotos||{};
+  const steps=current.steps,total=steps.length,sp=current.stepPhotos||{},sv=current.stepVideos||{};
   const cb=document.getElementById("car-badge"),cl=document.getElementById("car-label"),ct=document.getElementById("car-text");
   const ci=document.getElementById("car-img"),cn=document.getElementById("car-nophoto"),cd=document.getElementById("car-dots");
   if(!cb)return;
   cb.textContent=`Paso ${carIdx+1} de ${total}`;
   cl.textContent=`PASO ${carIdx+1}`;
   ct.textContent=steps[carIdx];
-  const photo=sp[carIdx];
-  if(photo){ci.src=photo;ci.style.display="block";cn.style.display="none";}
+  // Remove any previously injected video element
+  const existingVid=document.getElementById("car-step-vid");if(existingVid)existingVid.remove();
+  const videoUrl=sv[carIdx],photo=sp[carIdx];
+  if(videoUrl){
+    ci.style.display="none";cn.style.display="none";
+    const vid=document.createElement("video");vid.id="car-step-vid";vid.src=videoUrl;
+    vid.style.cssText="width:100%;height:100%;object-fit:contain;position:absolute;top:0;left:0;background:#1a1a1a;";
+    vid.controls=true;vid.playsInline=true;
+    document.getElementById("car-photo").appendChild(vid);
+  }else if(photo){ci.src=photo;ci.style.display="block";cn.style.display="none";}
   else{ci.style.display="none";cn.style.display="flex";}
   cd.innerHTML=steps.map((_,i)=>`<div class="car-dot${i===carIdx?" active":""}"></div>`).join("");
 }
@@ -883,11 +891,19 @@ function getAllRecipes(){
 
 // ===== ADMIN FORM =====
 let adminStepPhotos={},mainPhotoData="";
+let adminStepVideos={}; // {stepIndex: supabase_url}
 
 function compressImg(dataUrl,cb){
   const img=new Image();
   img.onload=()=>{const mx=800;let w=img.width,h=img.height;if(Math.max(w,h)>mx){const r=mx/Math.max(w,h);w=Math.round(w*r);h=Math.round(h*r);}const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL("image/jpeg",.72));};
   img.src=dataUrl;
+}
+async function uploadVideoToSupabase(file,filename){
+  const bucket='recipe-photos';
+  const url=SUPA_URL+'/storage/v1/object/'+bucket+'/'+filename;
+  const res=await fetch(url,{method:'POST',headers:{...{'Content-Type':file.type},...Object.fromEntries(Object.entries(_sh).filter(([k])=>k!=='Content-Type'))},body:file});
+  if(!res.ok)throw new Error('video upload failed');
+  return SUPA_URL+'/storage/v1/object/public/'+bucket+'/'+filename;
 }
 function loadMainPhoto(e){
   const file=e.target.files[0];if(!file)return;
@@ -901,10 +917,15 @@ function addIng(val=""){
 }
 function addStep(val="",photoData="",idx=null){
   const list=document.getElementById("step-list"),si=idx!==null?idx:list.children.length;
-  const div=document.createElement("div");div.className="step-photo-row";div.dataset.idx=si;
+  const div=document.createElement("div");div.className="step-photo-row";div.dataset.idx=si;div.dataset.mediaType="photos";
   const outer=document.createElement("div");outer.style.cssText="display:flex;flex-direction:column;gap:4px;flex:1;";
+  // Media type toggle
+  const tog=document.createElement("div");tog.style.cssText="display:flex;gap:4px;margin-bottom:6px;";
+  const mkTog=(label,val2)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.dataset.val=val2;b.style.cssText=`font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid #c5d8f0;background:${val2==='photos'?'#1a5ca8':'#fff'};color:${val2==='photos'?'#fff':'#555'};`;b.onclick=()=>toggleStepMedia(div,val2,si);return b;};
+  tog.appendChild(mkTog("📷 Fotos","photos"));tog.appendChild(mkTog("🎥 Vídeo","video"));
+  outer.appendChild(tog);
   const inner=document.createElement("div");inner.style.cssText="display:flex;gap:8px;align-items:flex-start;";
-  const pw=document.createElement("div");pw.style.cssText="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;";
+  const pw=document.createElement("div");pw.className="step-pw";pw.style.cssText="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;";
   if(photoData){const img=document.createElement("img");img.className="step-thumb";img.src=photoData;img.style.cssText="width:48px;height:48px;object-fit:cover;border-radius:4px;";pw.appendChild(img);}
   else{const ph=document.createElement("div");ph.className="step-add-photo";ph.textContent="📷";pw.appendChild(ph);}
   const mkBtn=(label,cap)=>{const lb=document.createElement("label");lb.style.cssText="font-size:9px;background:#f0f0f0;border:1px solid #ddd;border-radius:3px;padding:2px 4px;cursor:pointer;white-space:nowrap;";lb.textContent=label;const fi=document.createElement("input");fi.type="file";fi.accept="image/*";if(cap)fi.setAttribute("capture","environment");fi.style.display="none";fi.onchange=e=>loadStepPhoto(e,si,div);lb.appendChild(fi);return lb;};
@@ -918,6 +939,37 @@ function addStep(val="",photoData="",idx=null){
 function loadStepPhoto(e,idx,rowEl){
   const file=e.target.files[0];if(!file)return;
   const r=new FileReader();r.onload=ev=>compressImg(ev.target.result,c=>{adminStepPhotos[idx]=c;const old=rowEl.querySelector(".step-thumb,.step-add-photo");if(old){const img=document.createElement("img");img.className="step-thumb";img.src=c;img.style.cssText="width:48px;height:48px;object-fit:cover;border-radius:4px;";old.replaceWith(img);}});r.readAsDataURL(file);
+}
+function toggleStepMedia(rowEl,type,idx){
+  const tog=rowEl.querySelector("[data-val]")?.parentElement;
+  if(tog)[...tog.children].forEach(b=>{const active=b.dataset.val===type;b.style.background=active?'#1a5ca8':'#fff';b.style.color=active?'#fff':'#555';});
+  rowEl.dataset.mediaType=type;
+  const pw=rowEl.querySelector(".step-pw");
+  if(!pw)return;
+  pw.innerHTML="";
+  if(type==="photos"){
+    const mkBtn=(label,cap)=>{const lb=document.createElement("label");lb.style.cssText="font-size:9px;background:#f0f0f0;border:1px solid #ddd;border-radius:3px;padding:2px 4px;cursor:pointer;white-space:nowrap;";lb.textContent=label;const fi=document.createElement("input");fi.type="file";fi.accept="image/*";if(cap)fi.setAttribute("capture","environment");fi.style.display="none";fi.onchange=e=>loadStepPhoto(e,idx,rowEl);lb.appendChild(fi);return lb;};
+    const ph=document.createElement("div");ph.className="step-add-photo";ph.textContent="📷";pw.appendChild(ph);
+    pw.appendChild(mkBtn("📷 Cám.",true));pw.appendChild(mkBtn("🖼️ Gal.",false));
+  }else{
+    const mkVBtn=(label,cap)=>{const lb=document.createElement("label");lb.style.cssText="font-size:9px;background:#e8f0fb;border:1px solid #c5d8f0;color:#1a5ca8;border-radius:3px;padding:2px 4px;cursor:pointer;white-space:nowrap;display:block;margin-bottom:3px;";lb.textContent=label;const fi=document.createElement("input");fi.type="file";fi.accept="video/*";if(cap)fi.setAttribute("capture","environment");fi.style.display="none";fi.onchange=e=>loadStepVideo(e,idx,rowEl);lb.appendChild(fi);return lb;};
+    const ph=document.createElement("div");ph.className="step-add-photo";ph.textContent="🎥";pw.appendChild(ph);
+    pw.appendChild(mkVBtn("🎥 Grabar",true));pw.appendChild(mkVBtn("📁 Galería",false));
+  }
+}
+function loadStepVideo(e,idx,rowEl){
+  const file=e.target.files[0];if(!file)return;
+  const filename='step-video-'+Date.now()+'.'+file.name.split('.').pop();
+  showToast("⏳ Subiendo vídeo...");
+  uploadVideoToSupabase(file,filename).then(url=>{
+    adminStepVideos[idx]=url;
+    const old=rowEl.querySelector(".step-add-photo, video");
+    const vid=document.createElement("video");
+    vid.src=url;vid.style.cssText="width:60px;height:48px;object-fit:cover;border-radius:4px;";
+    vid.muted=true;vid.playsInline=true;
+    if(old)old.replaceWith(vid);
+    showToast("✅ Vídeo subido");
+  }).catch(()=>showToast("❌ Error al subir vídeo"));
 }
 function renumberSteps(){[...document.getElementById("step-list").children].forEach((row,i)=>{row.dataset.idx=i;const ta=row.querySelector("textarea");if(ta)ta.placeholder=`Descripción del paso ${i+1}`;});}
 
@@ -966,15 +1018,16 @@ function saveRecipe(){
   const steps=stepRows.map(r=>{const t=r.querySelector("textarea");return t?t.value.trim():"";}).filter(Boolean);
   if(!steps.length){showToast("⚠️ Añade al menos un paso");return;}
   const stepPhotos={};stepRows.forEach((row,i)=>{const oi=parseInt(row.dataset.idx,10);if(adminStepPhotos[oi])stepPhotos[i]=adminStepPhotos[oi];});
+  const stepVideos={};stepRows.forEach((row,i)=>{const oi=parseInt(row.dataset.idx,10);if(adminStepVideos[oi])stepVideos[i]=adminStepVideos[oi];});
   const quiz=collectQuiz();
   const customs=getCustomRecipes();
   if(editId){
     const pId=parseInt(editId,10),i=customs.findIndex(r=>r.id===pId);
-    if(i>=0)customs[i]={...customs[i],name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,img:mainPhotoData||customs[i].img,quiz,updatedAt:Date.now()};
-    else{const orig=DATA.find(d=>d.id===pId)||{};customs.push({...orig,id:pId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,img:mainPhotoData||orig.img||"",quiz,createdAt:Date.now(),updatedAt:Date.now()});}
+    if(i>=0)customs[i]={...customs[i],name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData||customs[i].img,quiz,updatedAt:Date.now()};
+    else{const orig=DATA.find(d=>d.id===pId)||{};customs.push({...orig,id:pId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData||orig.img||"",quiz,createdAt:Date.now(),updatedAt:Date.now()});}
     saveCustomRecipes(customs);clearEditMode();showToast("✅ Formación actualizada");
   }else{
-    const newId=Date.now(),recipe={id:newId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,img:mainPhotoData,quiz,createdAt:newId,updatedAt:newId};
+    const newId=Date.now(),recipe={id:newId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData,quiz,createdAt:newId,updatedAt:newId};
     customs.push(recipe);saveCustomRecipes(customs);showToast("✅ Formación guardada");
     resetAdminForm();renderAdminList();updateStats();openItem(newId);return;
   }
@@ -992,7 +1045,7 @@ function resetAdminForm(){
   document.getElementById("step-list").innerHTML="";
   document.getElementById("quiz-list").innerHTML="";
   document.getElementById("admin-form-title").textContent="➕ Nueva formación";
-  mainPhotoData="";adminStepPhotos={};_displayMode="carousel";
+  mainPhotoData="";adminStepPhotos={};adminStepVideos={};_displayMode="carousel";
   toggleDisplay("carousel");
   addIng();addIng();addStep("","",0);addStep("","",1);addStep("","",2);
 }
@@ -1012,7 +1065,7 @@ function _fillForm(r){
   const fv=document.getElementById("f-video");if(fv)fv.value=r.video||"";
   try{mainPhotoData=r.img||"";const prev=document.getElementById("f-img-preview"),ph=document.getElementById("f-img-placeholder");if(mainPhotoData){prev.src=mainPhotoData;prev.style.display="block";ph.style.display="none";}else{prev.style.display="none";ph.style.display="flex";}}catch(e){}
   try{document.getElementById("ing-list").innerHTML="";(r.utensilios||r.ingredients||[]).forEach(v=>addIng(v));if(!(r.utensilios||r.ingredients||[]).length){addIng();addIng();}}catch(e){}
-  try{document.getElementById("step-list").innerHTML="";adminStepPhotos={};(r.steps||[]).forEach((s,i)=>addStep(s,(r.stepPhotos||{})[i]||"",i));if(!(r.steps||[]).length)addStep("","",0);}catch(e){}
+  try{document.getElementById("step-list").innerHTML="";adminStepPhotos={};adminStepVideos={};(r.steps||[]).forEach((s,i)=>addStep(s,(r.stepPhotos||{})[i]||"",i));if(!(r.steps||[]).length)addStep("","",0);const svids=r.stepVideos||{};Object.keys(svids).forEach(k=>{adminStepVideos[parseInt(k)]=svids[k];});}catch(e){}
   try{document.getElementById("quiz-list").innerHTML="";(r.quiz||[]).forEach(q=>addQuizQ(q));}catch(e){}
   _displayMode=r.displayMode||"carousel";toggleDisplay(_displayMode);
 }
