@@ -275,7 +275,7 @@ function initSupa(){}
     <p class="home-loc">📍 Les Voltes, 2 · Calella de Palafrugell</p>
     <div class="home-buttons">
       <button class="btn-main" onclick="show('list')">📚 Formaciones</button>
-      <button class="btn-secondary" onclick="requirePin(()=>show('admin'))">➕ Nueva Formación</button>
+      <button class="btn-secondary" onclick="show('admin')">➕ Nueva Formación</button>
       <button class="btn-tertiary" onclick="show('card')">📇 Tarjeta de Empleado</button>
     </div>
     <div class="home-stats"><div><strong id="sc">0</strong><span>Formaciones</span></div><div><strong id="scat">0</strong><span>Áreas</span></div></div>
@@ -999,7 +999,7 @@ function resetAdminForm(){
 function renderAdminList(){
   const c=getCustomRecipes(),el=document.getElementById("admin-recipe-list");
   if(!c.length){el.innerHTML='<div style="padding:20px;text-align:center;color:#aaa;font-size:13px;">Sin formaciones añadidas todavía</div>';return;}
-  el.innerHTML=c.map(r=>`<div class="admin-recipe-item"><div class="admin-recipe-emoji">${r.emoji||"📋"}</div><div class="admin-recipe-info"><div class="admin-recipe-name">${r.name}</div><div class="admin-recipe-cat">${r.cat} · ${(r.steps||[]).length} pasos</div><div style="font-size:10px;color:#aaa;margin-top:2px;">${r.updatedAt?'✏️ '+_fmtDate(r.updatedAt):r.createdAt?'➕ '+_fmtDate(r.createdAt):''}</div></div><div class="admin-recipe-actions"><button class="btn-edit" onclick="editCustomRecipe(${r.id})">✏️ Editar</button><button class="btn-danger" onclick="confirmDeleteRecipe(${r.id})">🗑️</button></div></div>`).join("");
+  el.innerHTML=c.map(r=>`<div class="admin-recipe-item"><div class="admin-recipe-emoji">${r.emoji||"📋"}</div><div class="admin-recipe-info"><div class="admin-recipe-name">${r.name}</div><div class="admin-recipe-cat">${r.cat} · ${(r.steps||[]).length} pasos</div><div style="font-size:10px;color:#aaa;margin-top:2px;">${r.updatedAt?'✏️ '+_fmtDate(r.updatedAt):r.createdAt?'➕ '+_fmtDate(r.createdAt):''}</div></div><div class="admin-recipe-actions"><button class="btn-edit" onclick="requirePin(()=>editCustomRecipe(${r.id}))">✏️ Editar</button><button class="btn-danger" onclick="confirmDeleteRecipe(${r.id})">🗑️</button></div></div>`).join("");
 }
 function _fillForm(r){
   document.getElementById("edit-id").value=r.id;
