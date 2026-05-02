@@ -664,7 +664,7 @@ function render(){
     grid.innerHTML=filtered.map(d=>{
       try{
         return `<div class="recipe-card" onclick="openItem(${d.id})">
-          <div class="card-top">${d.img?`<img src="${d.img}" alt="${d.name}" loading="lazy">`:`<div class="no-img">${d.emoji||"📋"}</div>`}<span class="card-cat-tag">${d.cat}</span>${(d.video&&(d.displayMode==="video"||d.displayMode==="both"))?'<span class="video-badge">▶ Vídeo</span>':""}</div>
+          <div class="card-top">${d.img?`<img src="${d.img}" alt="${d.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="no-img" style="display:none">${d.emoji||"📋"}</div>`:`<div class="no-img">${d.emoji||"📋"}</div>`}<span class="card-cat-tag">${d.cat}</span>${(d.video&&(d.displayMode==="video"||d.displayMode==="both"))?'<span class="video-badge">▶ Vídeo</span>':""}</div>
           <div class="card-body"><div class="card-title">${d.name}</div><div class="card-meta"><span>📋 ${(d.steps||[]).length} pasos</span><span>🔧 ${(d.utensilios||[]).length} mat.</span>${(d.quiz||[]).length?`<span>🧠 ${d.quiz.length}Q</span>`:""}</div><div class="card-desc">${d.desc||""}</div>${getStatusHtml(d)}</div>
         </div>`;
       }catch(e){return "";}
@@ -731,6 +731,8 @@ function initCarousel(){
 function renderCar(){
   if(!current||!current.steps||!current.steps.length)return;
   const steps=current.steps,total=steps.length,sp=current.stepPhotos||{},sv=current.stepVideos||{};
+  if(carIdx>=total)carIdx=total-1;
+  if(carIdx<0)carIdx=0;
   const cb=document.getElementById("car-badge"),cl=document.getElementById("car-label"),ct=document.getElementById("car-text");
   const ci=document.getElementById("car-img"),cn=document.getElementById("car-nophoto"),cd=document.getElementById("car-dots");
   if(!cb)return;
@@ -934,11 +936,12 @@ let _lastSaveTime=0;
 function saveCustomRecipes(arr){
   localStorage.setItem("calau_formacio",JSON.stringify(arr));
   _lastSaveTime=Date.now();
+  if(!navigator.onLine){setSyncStatus("📴 Guardado sin conexión","#e07b00");return;}
   setSyncStatus("⏳ Guardando...","#aaa");
   Promise.all(arr.map(r=>fetch(SUPA_URL+"/rest/v1/trainings",{method:"POST",headers:{..._sh,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:r.id,name:r.name,data:JSON.stringify(r)})}))).then(res=>{
     if(res.every(r=>r.ok)){setSyncStatus("✓ Sincronizado","#4caf50");setTimeout(()=>setSyncStatus(""),3000);}
     else setSyncStatus("⚠️ Error al guardar","#c00");
-  }).catch(()=>setSyncStatus("⚠️ Error al guardar","#c00"));
+  }).catch(()=>setSyncStatus("📴 Guardado sin conexión","#e07b00"));
 }
 function deleteFromSupabase(id){
   fetch(SUPA_URL+"/rest/v1/trainings",{method:"POST",headers:{..._sh,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id,name:"__deleted__",data:JSON.stringify({id,__deleted:true})})}).catch(()=>{});
@@ -1131,6 +1134,7 @@ function resetAdminForm(){
   document.getElementById("quiz-list").innerHTML="";
   document.getElementById("admin-form-title").textContent="➕ Nueva formación";
   mainPhotoData="";adminStepPhotos={};adminStepVideos={};_displayMode="carousel";
+  document.querySelectorAll('#admin input[type="file"]').forEach(f=>{f.value='';});
   _clearDraft();const draftBar=document.getElementById('draft-bar');if(draftBar)draftBar.style.display='none';
   toggleDisplay("carousel");
   addIng();addIng();addStep("","",0);addStep("","",1);addStep("","",2);
@@ -1378,6 +1382,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
   window.addEventListener("pagehide",stopSpeech);
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")closePinModal();});
   updatePinDisplay();
   toggleDisplay("carousel");
   const vr=document.getElementById("video-url-row");if(vr)vr.style.display="none";
