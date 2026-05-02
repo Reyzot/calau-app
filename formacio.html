@@ -353,6 +353,12 @@ function initSupa(){}
       <div class="admin-section-title">📋 Formaciones añadidas</div>
       <div class="admin-recipe-list" id="admin-recipe-list"></div>
     </div>
+    <!-- Banner borrador -->
+    <div id="draft-bar" style="display:none;background:#fff8e1;border:1px solid #f0c040;border-radius:12px;padding:12px 16px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:14px;">📝 Tienes un borrador de <strong id="draft-bar-name"></strong></span>
+      <button onclick="_restoreDraft()" style="background:#1a5ca8;color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;">Recuperar</button>
+      <button onclick="_discardDraft()" style="background:none;color:#999;border:none;font-size:13px;cursor:pointer;">Descartar</button>
+    </div>
     <div class="admin-section">
       <div class="admin-section-title" id="admin-form-title">➕ Nueva formación</div>
       <div class="admin-form">
@@ -622,7 +628,13 @@ function show(id){
   if(id==="list")render();
   if(id==="home")updateStats();
   if(id!=="detail")stopSpeech();
-  if(id==="admin"){renderAdminList();const il=document.getElementById("ing-list");const isEdit=document.getElementById("edit-id").value;if(!il.children.length&&!isEdit){addIng();addIng();addStep("","",0);addStep("","",1);addStep("","",2);}}
+  if(id==="admin"){
+    renderAdminList();
+    const il=document.getElementById("ing-list");const isEdit=document.getElementById("edit-id").value;if(!il.children.length&&!isEdit){addIng();addIng();addStep("","",0);addStep("","",1);addStep("","",2);}
+    if(_draftInterval)clearInterval(_draftInterval);
+    _draftInterval=setInterval(()=>{if(!document.getElementById("edit-id").value)_saveDraft();},3000);
+    setTimeout(()=>{if(!document.getElementById("edit-id").value&&!document.getElementById("f-name").value)_checkDraft();},200);
+  }else{if(_draftInterval){clearInterval(_draftInterval);_draftInterval=null;}}
   if(id==="card")renderOnboarding();
 }
 
@@ -864,6 +876,60 @@ function toggleDark(){document.body.classList.toggle("dark");localStorage.setIte
 // ===== SYNC =====
 function setSyncStatus(m,c){const el=document.getElementById("sync-status");if(el){el.textContent=m;el.style.color=c||"#aaa";}}
 function getCustomRecipes(){try{return JSON.parse(localStorage.getItem("calau_formacio")||"[]");}catch(e){return[];}}
+// ===== BORRADOR AUTOMÁTICO =====
+let _draftInterval=null;
+function _saveDraft(){
+  try{
+    const editId=document.getElementById("edit-id").value;
+    const name=document.getElementById("f-name").value;
+    const cat=document.getElementById("f-cat").value;
+    const fe=document.getElementById("f-emoji"),fd=document.getElementById("f-desc"),fy=document.getElementById("f-yield");
+    const emoji=fe?fe.value:"";const desc=fd?fd.value:"";const yieldVal=fy?fy.value:"";
+    const ingRows=[...document.getElementById("ing-list").children];
+    const utensilios=ingRows.map(r=>{const i=r.querySelector("input");return i?i.value.trim():"";}).filter(Boolean);
+    const stepRows=[...document.getElementById("step-list").children];
+    const steps=stepRows.map(row=>{const i=parseInt(row.dataset.idx,10);const ta=row.querySelector("textarea");return{text:ta?ta.value:'',photo:adminStepPhotos[i]||'',videoUrl:adminStepVideos[i]||null};});
+    const hasContent=name||utensilios.length||steps.some(s=>s.text);
+    if(!hasContent){_clearDraft();return;}
+    localStorage.setItem('calau_formacio_draft',JSON.stringify({editId,name,cat,emoji,desc,yieldVal,mainPhoto:mainPhotoData,utensilios,steps,ts:Date.now()}));
+  }catch(e){}
+}
+function _clearDraft(){localStorage.removeItem('calau_formacio_draft');}
+function _checkDraft(){
+  try{
+    const raw=localStorage.getItem('calau_formacio_draft');if(!raw)return;
+    const d=JSON.parse(raw);if(!d||!d.name)return;
+    const bar=document.getElementById('draft-bar');
+    if(bar){document.getElementById('draft-bar-name').textContent=d.name;bar.style.display='flex';}
+  }catch(e){}
+}
+function _restoreDraft(){
+  try{
+    const d=JSON.parse(localStorage.getItem('calau_formacio_draft')||'null');if(!d)return;
+    document.getElementById("f-name").value=d.name||'';
+    document.getElementById("f-cat").value=d.cat||'General';
+    const fe=document.getElementById("f-emoji");if(fe)fe.value=d.emoji||'';
+    const fd=document.getElementById("f-desc");if(fd)fd.value=d.desc||'';
+    const fy=document.getElementById("f-yield");if(fy)fy.value=d.yieldVal||'';
+    mainPhotoData=d.mainPhoto||'';
+    const prev=document.getElementById("f-img-preview"),ph=document.getElementById("f-img-placeholder");
+    if(prev&&ph){if(mainPhotoData){prev.src=mainPhotoData;prev.style.display='block';ph.style.display='none';}else{prev.style.display='none';ph.style.display='flex';}}
+    document.getElementById("ing-list").innerHTML='';
+    (d.utensilios||[]).forEach(v=>addIng(v));
+    if(!(d.utensilios||[]).length){addIng();addIng();}
+    document.getElementById("step-list").innerHTML='';
+    adminStepPhotos={};adminStepVideos={};
+    (d.steps||[]).forEach((s,i)=>{
+      if(s.videoUrl)adminStepVideos[i]=s.videoUrl;
+      addStep(s.text,s.photo,i,!!s.videoUrl);
+    });
+    if(!(d.steps||[]).length){addStep('','',0);addStep('','',1);addStep('','',2);}
+    const bar=document.getElementById('draft-bar');if(bar)bar.style.display='none';
+    showToast('📝 Borrador recuperado');
+  }catch(e){}
+}
+function _discardDraft(){_clearDraft();const bar=document.getElementById('draft-bar');if(bar)bar.style.display='none';}
+
 let _lastSaveTime=0;
 function saveCustomRecipes(arr){
   localStorage.setItem("calau_formacio",JSON.stringify(arr));
@@ -930,18 +996,22 @@ function addIng(val=""){
   const btn=document.createElement("button");btn.className="del-btn";btn.textContent="×";btn.onclick=function(){this.parentElement.remove();};
   div.appendChild(inp);div.appendChild(btn);list.appendChild(div);
 }
-function addStep(val="",photoData="",idx=null){
+function addStep(val="",photoData="",idx=null,videoExisting=false){
   const list=document.getElementById("step-list"),si=idx!==null?idx:list.children.length;
-  const div=document.createElement("div");div.className="step-photo-row";div.dataset.idx=si;div.dataset.mediaType="photos";
+  const div=document.createElement("div");div.className="step-photo-row";div.dataset.idx=si;div.dataset.mediaType=videoExisting?"video":"photos";
   const outer=document.createElement("div");outer.style.cssText="display:flex;flex-direction:column;gap:4px;flex:1;";
   // Media type toggle
   const tog=document.createElement("div");tog.style.cssText="display:flex;gap:4px;margin-bottom:6px;";
-  const mkTog=(label,val2)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.dataset.val=val2;b.style.cssText=`font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid #c5d8f0;background:${val2==='photos'?'#1a5ca8':'#fff'};color:${val2==='photos'?'#fff':'#555'};`;b.onclick=()=>toggleStepMedia(div,val2,si);return b;};
+  const mkTog=(label,val2)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.dataset.val=val2;b.style.cssText=`font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid #c5d8f0;background:${val2===(videoExisting?'video':'photos')?'#1a5ca8':'#fff'};color:${val2===(videoExisting?'video':'photos')?'#fff':'#555'};`;b.onclick=()=>toggleStepMedia(div,val2,si);return b;};
   tog.appendChild(mkTog("📷 Fotos","photos"));tog.appendChild(mkTog("🎥 Vídeo","video"));
   outer.appendChild(tog);
   const inner=document.createElement("div");inner.style.cssText="display:flex;gap:8px;align-items:flex-start;";
   const pw=document.createElement("div");pw.className="step-pw";pw.style.cssText="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;";
-  if(photoData){const img=document.createElement("img");img.className="step-thumb";img.src=photoData;img.style.cssText="width:48px;height:48px;object-fit:cover;border-radius:4px;";pw.appendChild(img);}
+  if(videoExisting){
+    const vb=document.createElement("div");vb.className="step-video-badge";
+    vb.style.cssText="width:48px;height:48px;background:#1a1a1a;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:default;";
+    vb.title="Vídeo guardado. Selecciona uno nuevo para reemplazarlo.";vb.textContent="🎥";pw.appendChild(vb);
+  }else if(photoData){const img=document.createElement("img");img.className="step-thumb";img.src=photoData;img.style.cssText="width:48px;height:48px;object-fit:cover;border-radius:4px;";pw.appendChild(img);}
   else{const ph=document.createElement("div");ph.className="step-add-photo";ph.textContent="📷";pw.appendChild(ph);}
   const mkBtn=(label,cap)=>{const lb=document.createElement("label");lb.style.cssText="font-size:9px;background:#f0f0f0;border:1px solid #ddd;border-radius:3px;padding:2px 4px;cursor:pointer;white-space:nowrap;";lb.textContent=label;const fi=document.createElement("input");fi.type="file";fi.accept="image/*";if(cap)fi.setAttribute("capture","environment");fi.style.display="none";fi.onchange=e=>loadStepPhoto(e,si,div);lb.appendChild(fi);return lb;};
   pw.appendChild(mkBtn("📷 Cám.",true));pw.appendChild(mkBtn("🖼️ Gal.",false));inner.appendChild(pw);
@@ -1040,13 +1110,13 @@ function saveRecipe(){
     const pId=parseInt(editId,10),i=customs.findIndex(r=>r.id===pId);
     if(i>=0)customs[i]={...customs[i],name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData||customs[i].img,quiz,changelog:[...(customs[i].changelog||[]),{action:'Editada',date:Date.now()}],updatedAt:Date.now()};
     else{const orig=DATA.find(d=>d.id===pId)||{};customs.push({...orig,id:pId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData||orig.img||"",quiz,changelog:[{action:'Creada',date:Date.now()}],createdAt:Date.now(),updatedAt:Date.now()});}
-    saveCustomRecipes(customs);clearEditMode();showToast("✅ Formación actualizada");
+    saveCustomRecipes(customs);_clearDraft();clearEditMode();showToast("✅ Formación actualizada");
+    current=getAllRecipes().find(d=>d.id===pId)||current;stopSpeech();show('detail');return;
   }else{
     const newId=Date.now(),recipe={id:newId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData,quiz,changelog:[{action:'Creada',date:Date.now()}],createdAt:newId,updatedAt:newId};
-    customs.push(recipe);saveCustomRecipes(customs);showToast("✅ Formación guardada");
+    customs.push(recipe);saveCustomRecipes(customs);_clearDraft();showToast("✅ Formación guardada");
     resetAdminForm();renderAdminList();updateStats();openItem(newId);return;
   }
-  resetAdminForm();renderAdminList();updateStats();
 }
 function resetAdminForm(){
   clearEditMode();
@@ -1061,6 +1131,7 @@ function resetAdminForm(){
   document.getElementById("quiz-list").innerHTML="";
   document.getElementById("admin-form-title").textContent="➕ Nueva formación";
   mainPhotoData="";adminStepPhotos={};adminStepVideos={};_displayMode="carousel";
+  _clearDraft();const draftBar=document.getElementById('draft-bar');if(draftBar)draftBar.style.display='none';
   toggleDisplay("carousel");
   addIng();addIng();addStep("","",0);addStep("","",1);addStep("","",2);
 }
@@ -1080,7 +1151,7 @@ function _fillForm(r){
   const fv=document.getElementById("f-video");if(fv)fv.value=r.video||"";
   try{mainPhotoData=r.img||"";const prev=document.getElementById("f-img-preview"),ph=document.getElementById("f-img-placeholder");if(mainPhotoData){prev.src=mainPhotoData;prev.style.display="block";ph.style.display="none";}else{prev.style.display="none";ph.style.display="flex";}}catch(e){}
   try{document.getElementById("ing-list").innerHTML="";(r.utensilios||r.ingredients||[]).forEach(v=>addIng(v));if(!(r.utensilios||r.ingredients||[]).length){addIng();addIng();}}catch(e){}
-  try{document.getElementById("step-list").innerHTML="";adminStepPhotos={};adminStepVideos={};(r.steps||[]).forEach((s,i)=>addStep(s,(r.stepPhotos||{})[i]||"",i));if(!(r.steps||[]).length)addStep("","",0);const svids=r.stepVideos||{};Object.keys(svids).forEach(k=>{adminStepVideos[parseInt(k)]=svids[k];});}catch(e){}
+  try{document.getElementById("step-list").innerHTML="";adminStepPhotos={};adminStepVideos={};const svids=r.stepVideos||{};(r.steps||[]).forEach((s,i)=>{const hasVid=!!svids[i];if(hasVid)adminStepVideos[i]=svids[i];addStep(s,(r.stepPhotos||{})[i]||"",i,hasVid);});if(!(r.steps||[]).length)addStep("","",0);}catch(e){}
   try{document.getElementById("quiz-list").innerHTML="";(r.quiz||[]).forEach(q=>addQuizQ(q));}catch(e){}
   _displayMode=r.displayMode||"carousel";toggleDisplay(_displayMode);
 }
