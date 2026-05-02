@@ -864,8 +864,10 @@ function toggleDark(){document.body.classList.toggle("dark");localStorage.setIte
 // ===== SYNC =====
 function setSyncStatus(m,c){const el=document.getElementById("sync-status");if(el){el.textContent=m;el.style.color=c||"#aaa";}}
 function getCustomRecipes(){try{return JSON.parse(localStorage.getItem("calau_formacio")||"[]");}catch(e){return[];}}
+let _lastSaveTime=0;
 function saveCustomRecipes(arr){
   localStorage.setItem("calau_formacio",JSON.stringify(arr));
+  _lastSaveTime=Date.now();
   setSyncStatus("⏳ Guardando...","#aaa");
   Promise.all(arr.map(r=>fetch(SUPA_URL+"/rest/v1/trainings",{method:"POST",headers:{..._sh,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:r.id,name:r.name,data:JSON.stringify(r)})}))).then(res=>{
     if(res.every(r=>r.ok)){setSyncStatus("✓ Sincronizado","#4caf50");setTimeout(()=>setSyncStatus(""),3000);}
@@ -877,14 +879,21 @@ function deleteFromSupabase(id){
 }
 let _syncing=false;
 async function syncFromSupabase(){
-  if(_syncing)return;_syncing=true;setSyncStatus("⏳ Sincronizando...","#aaa");
+  if(_syncing)return;
+  if(Date.now()-_lastSaveTime<12000){_syncing=false;return;}
+  _syncing=true;setSyncStatus("⏳ Sincronizando...","#aaa");
   try{
     const res=await fetch(SUPA_URL+"/rest/v1/trainings?select=*",{headers:_sh});
     if(!res.ok){setSyncStatus("⚠️ Sin conexión","#e07b00");_syncing=false;return;}
     const data=await res.json();
     const localDeleted=new Set(JSON.parse(localStorage.getItem('calau_formacio_deleted')||'[]'));
-    const from=data.map(r=>{try{return JSON.parse(r.data);}catch(e){return null;}}).filter(Boolean).filter(r=>!r.__deleted&&!localDeleted.has(r.id));
-    localStorage.setItem("calau_formacio",JSON.stringify(from));
+    const fromSupa=data.map(r=>{try{return JSON.parse(r.data);}catch(e){return null;}}).filter(Boolean).filter(r=>!r.__deleted&&!localDeleted.has(r.id));
+    const localCustom=getCustomRecipes();
+    const localMap=new Map(localCustom.map(r=>[r.id,r]));
+    const merged=fromSupa.map(r=>{const loc=localMap.get(r.id);return(loc&&(loc.updatedAt||0)>(r.updatedAt||0))?loc:r;});
+    const supaIds=new Set(fromSupa.map(r=>r.id));
+    localCustom.forEach(r=>{if(!supaIds.has(r.id))merged.push(r);});
+    localStorage.setItem("calau_formacio",JSON.stringify(merged));
     render();updateStats();setSyncStatus("✓ Sincronizado","#4caf50");setTimeout(()=>setSyncStatus(""),2000);
   }catch(e){setSyncStatus("⚠️ Sin conexión","#e07b00");}
   _syncing=false;
@@ -1289,7 +1298,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(localStorage.getItem("formacio_dark")==="1")document.body.classList.add("dark");
   updateStats();initSupa();syncFromSupabase();
   setInterval(syncFromSupabase,30000);
-  document.addEventListener("visibilitychange",()=>{if(document.hidden)stopSpeech();});
+  let _hiddenAt=0;
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden){stopSpeech();_hiddenAt=Date.now();}
+    else{
+      if(_hiddenAt&&Date.now()-_hiddenAt>5*60*1000){location.reload();}
+      else{syncFromSupabase();}
+    }
+  });
   window.addEventListener("pagehide",stopSpeech);
   updatePinDisplay();
   toggleDisplay("carousel");
