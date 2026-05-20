@@ -962,12 +962,14 @@ function setSyncStatus(msg,color){
   var el=document.getElementById("sync-status");
   if(el){el.innerHTML=msg;el.style.color=color||"#aaa";}
 }
-function saveCustomRecipes(arr){
+function saveCustomRecipes(arr, changedRecipe){
   localStorage.setItem("calau_custom",JSON.stringify(arr));
   _lastSaveTime=Date.now();
   if(!navigator.onLine){setSyncStatus("📴 Guardado sin conexión","#e07b00");return;}
+  // Solo subir a Supabase la receta que cambió, nunca todas a la vez
+  const toSave=changedRecipe?[changedRecipe]:arr;
   setSyncStatus("⏳ Guardando...","#aaa");
-  Promise.all(arr.map(function(r){
+  Promise.all(toSave.map(function(r){
     return fetch(SUPA_URL+"/rest/v1/recipes",{method:"POST",headers:{..._sh,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:r.id,name:r.name,data:JSON.stringify(r)})});
   })).then(function(res){
     if(res.every(function(r){return r.ok;})){setSyncStatus("✓ Sincronizado","#4caf50");setTimeout(function(){setSyncStatus("");},3000);}
@@ -1458,7 +1460,8 @@ async function saveRecipe(){
     }
     // Mover blobs de pasos reordenados en IndexedDB
     _existingMoves.forEach(({from,to})=>{_loadVBlob(parsedId+'_'+from).then(blob=>{if(blob)_saveVBlob(parsedId+'_'+to,blob);});});
-    saveCustomRecipes(customs);
+    const savedRecipe=customs.find(r=>r.id===parsedId);
+    saveCustomRecipes(customs, savedRecipe);
     _clearDraft();
     clearEditMode();
     showToast("✅ Elaboración actualizada");
@@ -1472,7 +1475,7 @@ async function saveRecipe(){
     const newId=recipeId;
     const recipe={id:newId,name,cat,emoji,desc,yield:yieldVal,video,allergens,ingredients,steps,stepPhotos,stepVideos,img:mainPhotoData,createdAt:newId,updatedAt:newId,changelog:[{action:'Creada',date:Date.now()}]};
     customs.push(recipe);
-    saveCustomRecipes(customs);
+    saveCustomRecipes(customs, recipe);
     _clearDraft();
     showToast("✅ Elaboración guardada");
     resetAdminForm();
