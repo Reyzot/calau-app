@@ -933,12 +933,17 @@ function _restoreDraft(){
 function _discardDraft(){_clearDraft();const bar=document.getElementById('draft-bar');if(bar)bar.style.display='none';}
 
 let _lastSaveTime=0;
-function saveCustomRecipes(arr){
+function backupFormacion(oldRec){
+  if(!oldRec)return;
+  fetch(SUPA_URL+"/rest/v1/training_backups",{method:"POST",headers:{..._sh,"Prefer":"return=minimal"},body:JSON.stringify({recipe_id:String(oldRec.id),data:JSON.stringify(oldRec),saved_at:Date.now()})}).catch(function(){});
+}
+function saveCustomRecipes(arr,changedRec){
   localStorage.setItem("calau_formacio",JSON.stringify(arr));
   _lastSaveTime=Date.now();
   if(!navigator.onLine){setSyncStatus("📴 Guardado sin conexión","#e07b00");return;}
+  const toSave=changedRec?[changedRec]:arr;
   setSyncStatus("⏳ Guardando...","#aaa");
-  Promise.all(arr.map(r=>fetch(SUPA_URL+"/rest/v1/trainings",{method:"POST",headers:{..._sh,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:r.id,name:r.name,data:JSON.stringify(r)})}))).then(res=>{
+  Promise.all(toSave.map(r=>fetch(SUPA_URL+"/rest/v1/trainings",{method:"POST",headers:{..._sh,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:r.id,name:r.name,data:JSON.stringify(r)})}))).then(res=>{
     if(res.every(r=>r.ok)){setSyncStatus("✓ Sincronizado","#4caf50");setTimeout(()=>setSyncStatus(""),3000);}
     else setSyncStatus("⚠️ Error al guardar","#c00");
   }).catch(()=>setSyncStatus("📴 Guardado sin conexión","#e07b00"));
@@ -1130,13 +1135,16 @@ function saveRecipe(){
   const customs=getCustomRecipes();
   if(editId){
     const pId=parseInt(editId,10),i=customs.findIndex(r=>r.id===pId);
+    const prevVersion=getCustomRecipes().find(r=>r.id===pId)||DATA.find(d=>d.id===pId);
+    backupFormacion(prevVersion);
     if(i>=0)customs[i]={...customs[i],name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData||customs[i].img,quiz,changelog:[...(customs[i].changelog||[]),{action:'Editada',date:Date.now()}],updatedAt:Date.now()};
     else{const orig=DATA.find(d=>d.id===pId)||{};customs.push({...orig,id:pId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData||orig.img||"",quiz,changelog:[{action:'Creada',date:Date.now()}],createdAt:Date.now(),updatedAt:Date.now()});}
-    saveCustomRecipes(customs);_clearDraft();clearEditMode();showToast("✅ Formación actualizada");
+    const savedRec=customs.find(r=>r.id===pId);
+    saveCustomRecipes(customs,savedRec);_clearDraft();clearEditMode();showToast("✅ Formación actualizada");
     current=getAllRecipes().find(d=>d.id===pId)||current;stopSpeech();show('detail');return;
   }else{
     const newId=Date.now(),recipe={id:newId,name,cat,emoji,desc,yield:yieldVal,video,displayMode:_displayMode,utensilios,steps,stepPhotos,stepVideos,img:mainPhotoData,quiz,changelog:[{action:'Creada',date:Date.now()}],createdAt:newId,updatedAt:newId};
-    customs.push(recipe);saveCustomRecipes(customs);_clearDraft();showToast("✅ Formación guardada");
+    customs.push(recipe);saveCustomRecipes(customs,recipe);_clearDraft();showToast("✅ Formación guardada");
     resetAdminForm();renderAdminList();updateStats();openItem(newId);return;
   }
 }
